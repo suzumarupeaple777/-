@@ -147,14 +147,15 @@
       const saved = localStorage.getItem('trade_guard_state');
       if (saved) {
         state = JSON.parse(saved);
-        // 日付が変わっていたら自動リセット
-        if (state.lastDate !== new Date().toLocaleDateString()) {
-          state.pnl = 0;
-          state.trades = 0;
-          state.lastDate = new Date().toLocaleDateString();
-          saveState();
-        }
+     
       }
+// 日付が変わっていたら「回数のみ」リセット（損益は繰り越し）
+if (state.lastDate !== new Date().toLocaleDateString()) {
+  state.trades = 0; // 残り回数のみ7回にリセット
+  state.lastDate = new Date().toLocaleDateString();
+  saveState();
+}
+ 
       updateUI();
     };
 
