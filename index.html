@@ -17,12 +17,13 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
     body { background-color: var(--bg); color: var(--text); padding: 12px; padding-bottom: 40px; }
     
-    /* ヘッダー・ダッシュボード */
-    .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-    .dash-card { background: var(--card-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border); text-align: center; }
-    .dash-title { font-size: 11px; color: var(--sub-text); margin-bottom: 4px; }
-    .dash-val { font-size: 20px; font-weight: bold; }
+    /* 3列ダッシュボード */
+    .dashboard { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+    .dash-card { background: var(--card-bg); padding: 10px 4px; border-radius: 12px; border: 1px solid var(--border); text-align: center; }
+    .dash-title { font-size: 10px; color: var(--sub-text); margin-bottom: 4px; font-weight: bold; }
+    .dash-val { font-size: 15px; font-weight: bold; }
     .val-minus { color: #ef5350; }
+    .val-plus { color: #81c784; }
     
     /* ロック画面 */
     .lock-banner { display: none; background: var(--accent-red); color: white; padding: 16px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 12px; animation: pulse 1.5s infinite; }
@@ -60,17 +61,21 @@
 </head>
 <body>
 
-  <!-- ロック警告（3万負け/7回達成時） -->
+  <!-- ロック警告 -->
   <div id="lockBanner" class="lock-banner">⛔ 本日のトレードは強制終了です</div>
 
-  <!-- ダッシュボード -->
+  <!-- 3列ダッシュボード -->
   <div class="dashboard">
     <div class="dash-card">
-      <div class="dash-title">本日累計損益</div>
-      <div id="pnlVal" class="dash-val">¥0</div>
+      <div class="dash-title">本日損益</div>
+      <div id="dailyPnlVal" class="dash-val">¥0</div>
     </div>
     <div class="dash-card">
-      <div class="dash-title">残りトレード回数</div>
+      <div class="dash-title">通算損益</div>
+      <div id="totalPnlVal" class="dash-val">¥0</div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-title">本日残り</div>
       <div id="countVal" class="dash-val">7回</div>
     </div>
   </div>
@@ -132,30 +137,28 @@
     </ul>
   </div>
 
-  <button class="reset-btn" onclick="manualReset()">データを手動リセット（テスト用）</button>
+  <button class="reset-btn" onclick="manualReset()">全データを完全初期化（テスト用）</button>
 
   <script>
-    // データ保持用の状態
     let state = {
-      pnl: 0,
+      totalPnl: 0,
+      dailyPnl: 0,
       trades: 0,
       lastDate: new Date().toLocaleDateString()
     };
 
-    // 初期化
     window.onload = function() {
       const saved = localStorage.getItem('trade_guard_state');
       if (saved) {
         state = JSON.parse(saved);
-     
+        // 日付が変わったら「本日損益」と「回数」のみリセット（通算損益は維持）
+        if (state.lastDate !== new Date().toLocaleDateString()) {
+          state.trades = 0;
+          state.dailyPnl = 0;
+          state.lastDate = new Date().toLocaleDateString();
+          saveState();
+        }
       }
-// 日付が変わっていたら「回数のみ」リセット（損益は繰り越し）
-if (state.lastDate !== new Date().toLocaleDateString()) {
-  state.trades = 0; // 残り回数のみ7回にリセット
-  state.lastDate = new Date().toLocaleDateString();
-  saveState();
-}
- 
       updateUI();
     };
 
@@ -176,7 +179,8 @@ if (state.lastDate !== new Date().toLocaleDateString()) {
       const r1 = document.getElementById('reason1').value;
       const r2 = document.getElementById('reason2').value;
 
-      const isLocked = state.pnl <= -30000 || state.trades >= 7;
+      // ロック条件：本日の損失が-3万以下、または本日の回数が7回以上
+      const isLocked = (state.dailyPnl || 0) <= -30000 || state.trades >= 7;
       const has2Reasons = r1 !== "" && r2 !== "" && r1 !== r2;
       const allChecks = chkBar && chkOco && chkTrend && chkVol;
 
@@ -195,7 +199,7 @@ if (state.lastDate !== new Date().toLocaleDateString()) {
     }
 
     function addTrade() {
-      if (state.pnl <= -30000 || state.trades >= 7) {
+      if ((state.dailyPnl || 0) <= -30000 || state.trades >= 7) {
         alert("本日の上限に達しているため記録できません。");
         return;
       }
@@ -207,11 +211,11 @@ if (state.lastDate !== new Date().toLocaleDateString()) {
         return;
       }
 
-      state.pnl += val;
+      state.dailyPnl = (state.dailyPnl || 0) + val;
+      state.totalPnl = (state.totalPnl || 0) + val;
       state.trades += 1;
       saveState();
 
-      // チェック解除と入力クリア
       input.value = "";
       document.querySelectorAll('.toggle-btn').forEach(el => el.classList.remove('active'));
       document.getElementById('reason1').value = "";
@@ -221,22 +225,32 @@ if (state.lastDate !== new Date().toLocaleDateString()) {
     }
 
     function updateUI() {
-      const pnlEl = document.getElementById('pnlVal');
-      pnlEl.innerText = "¥" + state.pnl.toLocaleString();
-      if (state.pnl < 0) pnlEl.className = "dash-val val-minus";
-      else pnlEl.className = "dash-val";
+      // 本日損益の表示
+      const dailyEl = document.getElementById('dailyPnlVal');
+      const dPnl = state.dailyPnl || 0;
+      dailyEl.innerText = "¥" + dPnl.toLocaleString();
+      dailyEl.className = dPnl < 0 ? "dash-val val-minus" : (dPnl > 0 ? "dash-val val-plus" : "dash-val");
 
+      // 通算損益の表示
+      const totalEl = document.getElementById('totalPnlVal');
+      const tPnl = state.totalPnl || 0;
+      totalEl.innerText = "¥" + tPnl.toLocaleString();
+      totalEl.className = tPnl < 0 ? "dash-val val-minus" : (tPnl > 0 ? "dash-val val-plus" : "dash-val");
+
+      // 残り回数
       document.getElementById('countVal').innerText = (7 - state.trades) + "回";
 
-      const isLocked = state.pnl <= -30000 || state.trades >= 7;
+      // ロック状態チェック
+      const isLocked = dPnl <= -30000 || state.trades >= 7;
       document.getElementById('lockBanner').style.display = isLocked ? "block" : "none";
 
       checkLogic();
     }
 
     function manualReset() {
-      if (confirm("本日のデータを初期化してリセットしますか？")) {
-        state.pnl = 0;
+      if (confirm("通算損益も含めてすべてのデータを初期化しますか？")) {
+        state.totalPnl = 0;
+        state.dailyPnl = 0;
         state.trades = 0;
         state.lastDate = new Date().toLocaleDateString();
         saveState();
