@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>225 Trade Guard</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --card-bg: #1e1e1e;
+      --accent-green: #2e7d32;
+      --accent-red: #c62828;
+      --text: #ffffff;
+      --sub-text: #b0b0b0;
+      --border: #333333;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
+    body { background-color: var(--bg); color: var(--text); padding: 12px; padding-bottom: 40px; }
+    
+    /* ヘッダー・ダッシュボード */
+    .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .dash-card { background: var(--card-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border); text-align: center; }
+    .dash-title { font-size: 11px; color: var(--sub-text); margin-bottom: 4px; }
+    .dash-val { font-size: 20px; font-weight: bold; }
+    .val-minus { color: #ef5350; }
+    
+    /* ロック画面 */
+    .lock-banner { display: none; background: var(--accent-red); color: white; padding: 16px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 12px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { opacity: 0.9; } 50% { opacity: 1; } 100% { opacity: 0.9; } }
+
+    /* トグルボタンリスト */
+    .section-title { font-size: 13px; color: var(--sub-text); margin: 12px 0 6px 4px; font-weight: bold; }
+    .check-grid { display: flex; flex-direction: column; gap: 8px; }
+    .toggle-btn { background: var(--card-bg); border: 1px solid var(--border); color: var(--sub-text); padding: 14px; border-radius: 10px; font-size: 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .toggle-btn.active { background: #1b3820; border-color: var(--accent-green); color: #81c784; }
+    .toggle-btn.active::after { content: "🟢 OK"; }
+    .toggle-btn:not(.active)::after { content: "🔴 未チェック"; font-size: 11px; color: #ef5350; }
+
+    /* プルダウン */
+    .select-box { background: var(--card-bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 10px; font-size: 14px; width: 100%; margin-bottom: 8px; outline: none; }
+
+    /* 判定ボタン */
+    .judge-card { margin: 16px 0; padding: 16px; border-radius: 12px; text-align: center; font-size: 20px; font-weight: bold; background: #2a2a2a; border: 2px solid var(--border); }
+    .judge-card.go { background: var(--accent-green); border-color: #4caf50; color: white; }
+    .judge-card.nogo { background: #3a1c1c; border-color: var(--accent-red); color: #ef5350; }
+
+    /* 損益入力エリア */
+    .result-input-group { display: flex; gap: 8px; margin-bottom: 20px; }
+    .num-input { background: var(--card-bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 10px; font-size: 16px; width: 60%; text-align: right; }
+    .action-btn { background: #0288d1; border: none; color: white; padding: 12px; border-radius: 10px; font-weight: bold; width: 40%; font-size: 14px; }
+
+    /* 下段ルール表示エリア */
+    .rules-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-top: 20px; }
+    .rules-card h3 { font-size: 13px; color: #ffb74d; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+    .rules-card ul { font-size: 12px; color: #ccc; padding-left: 18px; line-height: 1.6; }
+    .rules-card li { margin-bottom: 4px; }
+
+    .reset-btn { background: none; border: none; color: #666; font-size: 11px; width: 100%; margin-top: 15px; text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <!-- ロック警告（3万負け/7回達成時） -->
+  <div id="lockBanner" class="lock-banner">⛔ 本日のトレードは強制終了です</div>
+
+  <!-- ダッシュボード -->
+  <div class="dashboard">
+    <div class="dash-card">
+      <div class="dash-title">本日累計損益</div>
+      <div id="pnlVal" class="dash-val">¥0</div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-title">残りトレード回数</div>
+      <div id="countVal" class="dash-val">7回</div>
+    </div>
+  </div>
+
+  <!-- チェックリスト -->
+  <div class="section-title">安全チェック（タップで切替）</div>
+  <div class="check-grid">
+    <div class="toggle-btn" id="chkBar" onclick="toggleCheck(this)">5分足が確定している</div>
+    <div class="toggle-btn" id="chkOco" onclick="toggleCheck(this)">OCO注文（利確・損切り）準備済み</div>
+    <div class="toggle-btn" id="chkTrend" onclick="toggleCheck(this)">上位足（60m/15m）と同方向</div>
+    <div class="toggle-btn" id="chkVol" onclick="toggleCheck(this)">出来高が増加している</div>
+  </div>
+
+  <div class="section-title">エントリー根拠（2つ以上選択）</div>
+  <select id="reason1" class="select-box" onchange="checkLogic()">
+    <option value="">根拠1を選択...</option>
+    <option value="PO">1. パーフェクトオーダー成立</option>
+    <option value="PO_BREAK">2. PO物別れ（押し・戻り）</option>
+    <option value="MA5">3. 5MA 下半身 / 逆下半身</option>
+    <option value="RES_SUP">4. レジサポ転換</option>
+    <option value="MACD">5. MACD（クロス/ゼロライン）</option>
+  </select>
+
+  <select id="reason2" class="select-box" onchange="checkLogic()">
+    <option value="">根拠2を選択...</option>
+    <option value="PO">1. パーフェクトオーダー成立</option>
+    <option value="PO_BREAK">2. PO物別れ（押し・戻り）</option>
+    <option value="MA5">3. 5MA 下半身 / 逆下半身</option>
+    <option value="RES_SUP">4. レジサポ転換</option>
+    <option value="MACD">5. MACD（クロス/ゼロライン）</option>
+  </select>
+
+  <!-- 判定表示 -->
+  <div id="judgeCard" class="judge-card nogo">⛔ 条件未達（見送り）</div>
+
+  <!-- トレード結果記録 -->
+  <div class="section-title">トレード結果の記録</div>
+  <div class="result-input-group">
+    <input type="number" id="tradePnl" class="num-input" placeholder="損益を入力(例: -5000)" step="1000">
+    <button class="action-btn" onclick="addTrade()">結果を確定</button>
+  </div>
+
+  <!-- 下段：マニュアル・ルール -->
+  <div class="rules-card">
+    <h3>🚨 絶対ルール（リスク管理）</h3>
+    <ul>
+      <li>運用資金：毎日70万円スタート（超過分は出金）</li>
+      <li>日次損失上限：<b>-30,000円到達で即強制終了</b></li>
+      <li>1日の上限回数：<b>最大7回まで</b></li>
+      <li>注文と同時に必ずOCOを設定すること</li>
+    </ul>
+
+    <h3 style="margin-top:12px;">🔍 判断プロセス</h3>
+    <ul>
+      <li>週足・日足：全体トレンドの把握</li>
+      <li>60分・15分足：本日の方向性と節目</li>
+      <li>5分足：ポイント探索 ＆ <b>確定足待ち</b></li>
+      <li>1分足：エントリータイミング</li>
+    </ul>
+  </div>
+
+  <button class="reset-btn" onclick="manualReset()">データを手動リセット（テスト用）</button>
+
+  <script>
+    // データ保持用の状態
+    let state = {
+      pnl: 0,
+      trades: 0,
+      lastDate: new Date().toLocaleDateString()
+    };
+
+    // 初期化
+    window.onload = function() {
+      const saved = localStorage.getItem('trade_guard_state');
+      if (saved) {
+        state = JSON.parse(saved);
+        // 日付が変わっていたら自動リセット
+        if (state.lastDate !== new Date().toLocaleDateString()) {
+          state.pnl = 0;
+          state.trades = 0;
+          state.lastDate = new Date().toLocaleDateString();
+          saveState();
+        }
+      }
+      updateUI();
+    };
+
+    function saveState() {
+      localStorage.setItem('trade_guard_state', JSON.stringify(state));
+    }
+
+    function toggleCheck(el) {
+      el.classList.toggle('active');
+      checkLogic();
+    }
+
+    function checkLogic() {
+      const chkBar = document.getElementById('chkBar').classList.contains('active');
+      const chkOco = document.getElementById('chkOco').classList.contains('active');
+      const chkTrend = document.getElementById('chkTrend').classList.contains('active');
+      const chkVol = document.getElementById('chkVol').classList.contains('active');
+      const r1 = document.getElementById('reason1').value;
+      const r2 = document.getElementById('reason2').value;
+
+      const isLocked = state.pnl <= -30000 || state.trades >= 7;
+      const has2Reasons = r1 !== "" && r2 !== "" && r1 !== r2;
+      const allChecks = chkBar && chkOco && chkTrend && chkVol;
+
+      const judgeCard = document.getElementById('judgeCard');
+
+      if (isLocked) {
+        judgeCard.className = "judge-card nogo";
+        judgeCard.innerText = "⛔ ロック中（発注不可）";
+      } else if (allChecks && has2Reasons) {
+        judgeCard.className = "judge-card go";
+        judgeCard.innerText = "✅ エントリー許可（GO）";
+      } else {
+        judgeCard.className = "judge-card nogo";
+        judgeCard.innerText = "⛔ 条件未達（見送り）";
+      }
+    }
+
+    function addTrade() {
+      if (state.pnl <= -30000 || state.trades >= 7) {
+        alert("本日の上限に達しているため記録できません。");
+        return;
+      }
+
+      const input = document.getElementById('tradePnl');
+      const val = parseInt(input.value);
+      if (isNaN(val)) {
+        alert("損益金額を入力してください（例: -5000 や 12000）");
+        return;
+      }
+
+      state.pnl += val;
+      state.trades += 1;
+      saveState();
+
+      // チェック解除と入力クリア
+      input.value = "";
+      document.querySelectorAll('.toggle-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById('reason1').value = "";
+      document.getElementById('reason2').value = "";
+
+      updateUI();
+    }
+
+    function updateUI() {
+      const pnlEl = document.getElementById('pnlVal');
+      pnlEl.innerText = "¥" + state.pnl.toLocaleString();
+      if (state.pnl < 0) pnlEl.className = "dash-val val-minus";
+      else pnlEl.className = "dash-val";
+
+      document.getElementById('countVal').innerText = (7 - state.trades) + "回";
+
+      const isLocked = state.pnl <= -30000 || state.trades >= 7;
+      document.getElementById('lockBanner').style.display = isLocked ? "block" : "none";
+
+      checkLogic();
+    }
+
+    function manualReset() {
+      if (confirm("本日のデータを初期化してリセットしますか？")) {
+        state.pnl = 0;
+        state.trades = 0;
+        state.lastDate = new Date().toLocaleDateString();
+        saveState();
+        updateUI();
+      }
+    }
+  </script>
+</body>
+</html>
