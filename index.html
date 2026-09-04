@@ -76,7 +76,7 @@
     </div>
     <div class="dash-card">
       <div class="dash-title">本日残り</div>
-      <div id="countVal" class="dash-val">7回</div>
+      <div id="countVal" class="dash-val">5回</div>
     </div>
   </div>
 
@@ -124,7 +124,7 @@
     <ul>
       <li>運用資金：毎日70万円スタート（超過分は出金）</li>
       <li>日次損失上限：<b>-30,000円到達で即強制終了</b></li>
-      <li>1日の上限回数：<b>最大7回まで</b></li>
+      <li>1日の上限回数：<b>最大5回まで</b></li>
       <li>注文と同時に必ずOCOを設定すること</li>
     </ul>
 
@@ -151,7 +151,6 @@
       const saved = localStorage.getItem('trade_guard_state');
       if (saved) {
         state = JSON.parse(saved);
-        // 日付が変わったら「本日損益」と「回数」のみリセット（通算損益は維持）
         if (state.lastDate !== new Date().toLocaleDateString()) {
           state.trades = 0;
           state.dailyPnl = 0;
@@ -179,8 +178,8 @@
       const r1 = document.getElementById('reason1').value;
       const r2 = document.getElementById('reason2').value;
 
-      // ロック条件：本日の損失が-3万以下、または本日の回数が7回以上
-      const isLocked = (state.dailyPnl || 0) <= -30000 || state.trades >= 7;
+      // ロック条件：本日の損失が-3万以下、または本日の回数が5回以上
+      const isLocked = (state.dailyPnl || 0) <= -30000 || state.trades >= 5;
       const has2Reasons = r1 !== "" && r2 !== "" && r1 !== r2;
       const allChecks = chkBar && chkOco && chkTrend && chkVol;
 
@@ -199,7 +198,7 @@
     }
 
     function addTrade() {
-      if ((state.dailyPnl || 0) <= -30000 || state.trades >= 7) {
+      if ((state.dailyPnl || 0) <= -30000 || state.trades >= 5) {
         alert("本日の上限に達しているため記録できません。");
         return;
       }
@@ -225,23 +224,20 @@
     }
 
     function updateUI() {
-      // 本日損益の表示
       const dailyEl = document.getElementById('dailyPnlVal');
       const dPnl = state.dailyPnl || 0;
       dailyEl.innerText = "¥" + dPnl.toLocaleString();
       dailyEl.className = dPnl < 0 ? "dash-val val-minus" : (dPnl > 0 ? "dash-val val-plus" : "dash-val");
 
-      // 通算損益の表示
       const totalEl = document.getElementById('totalPnlVal');
       const tPnl = state.totalPnl || 0;
       totalEl.innerText = "¥" + tPnl.toLocaleString();
       totalEl.className = tPnl < 0 ? "dash-val val-minus" : (tPnl > 0 ? "dash-val val-plus" : "dash-val");
 
-      // 残り回数
-      document.getElementById('countVal').innerText = (7 - state.trades) + "回";
+      // 残り回数を 5回 ベースで計算
+      document.getElementById('countVal').innerText = (5 - state.trades) + "回";
 
-      // ロック状態チェック
-      const isLocked = dPnl <= -30000 || state.trades >= 7;
+      const isLocked = dPnl <= -30000 || state.trades >= 5;
       document.getElementById('lockBanner').style.display = isLocked ? "block" : "none";
 
       checkLogic();
